@@ -13,6 +13,7 @@ func buildRouter(store *Store, persister *Persister, pool *pgxpool.Pool, jwtSecr
 	auth := authMiddleware(jwtSecret)
 	txH := &TxHandler{store: store, persist: persister}
 	monthH := &MonthHandler{store: store, persist: persister}
+	acctH := &AccountHandler{store: store, persist: persister}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
@@ -30,6 +31,11 @@ func buildRouter(store *Store, persister *Persister, pool *pgxpool.Pool, jwtSecr
 	protected.HandleFunc("GET /v1/months/{ym}/summary", monthH.Summary)
 	protected.HandleFunc("POST /v1/months/{ym}/duplicate", monthH.Duplicate)
 	protected.HandleFunc("GET /v1/months/{ym}/categories", monthH.Categories)
+
+	protected.HandleFunc("GET /v1/accounts", acctH.List)
+	protected.HandleFunc("POST /v1/accounts", acctH.Create)
+	protected.HandleFunc("PUT /v1/accounts/{id}", acctH.Update)
+	protected.HandleFunc("DELETE /v1/accounts/{id}", acctH.Delete)
 
 	mux.Handle("/v1/", auth(protected))
 
