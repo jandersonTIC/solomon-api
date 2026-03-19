@@ -76,9 +76,21 @@ func buildRouter(store *Store, persister *Persister, pool *pgxpool.Pool, jwtSecr
 	appleH := &AuthHandler{pool: pool, store: store, apple: NewAppleAuth(), jwtSecret: jwtSecret}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+		w.Write([]byte(`{"status":"alive"}`))
+	})
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if pool != nil {
+			if err := pool.Ping(ctx); err != nil {
+				writeErr(w, http.StatusServiceUnavailable, "db unreachable")
+				return
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ready"}`))
 	})
 
 	mux.HandleFunc("POST /v1/auth/apple", appleH.HandleAppleAuth)

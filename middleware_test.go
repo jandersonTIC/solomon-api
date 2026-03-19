@@ -19,9 +19,19 @@ func TestCORSMiddleware(t *testing.T) {
 	}
 }
 
-func TestHealthEndpoint(t *testing.T) {
+func TestLivenessEndpoint(t *testing.T) {
 	_, handler, _ := newTestServer(t)
-	req := httptest.NewRequest("GET", "/health", nil)
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d", w.Code)
+	}
+}
+
+func TestReadinessEndpointNoPool(t *testing.T) {
+	_, handler, _ := newTestServer(t)
+	req := httptest.NewRequest("GET", "/readyz", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
