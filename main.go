@@ -14,12 +14,15 @@ func buildRouter(store *Store, persister *Persister, pool *pgxpool.Pool, jwtSecr
 	txH := &TxHandler{store: store, persist: persister}
 	monthH := &MonthHandler{store: store, persist: persister}
 	acctH := &AccountHandler{store: store, persist: persister}
+	appleH := &AuthHandler{pool: pool, store: store, apple: NewAppleAuth(), jwtSecret: jwtSecret}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
 	})
+
+	mux.HandleFunc("POST /v1/auth/apple", appleH.HandleAppleAuth)
 
 	protected := http.NewServeMux()
 	protected.HandleFunc("GET /v1/transactions", txH.List)
