@@ -1,0 +1,9 @@
+solomon-api
+*.test
+*.out
+*.prof
+.env
+.git
+.github
+README.md
+docker-compose.yml
