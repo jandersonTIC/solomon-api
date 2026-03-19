@@ -1,0 +1,6 @@
+solomon-api
+*.exe
+*.test
+*.out
+*.prof
+.env
