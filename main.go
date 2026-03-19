@@ -1,13 +1,72 @@
 package main
 
 import (
+	"context"
+	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func main() {}
+func main() {
+	port := env("PORT", "8080")
+	dbURL := env("DATABASE_URL", "postgres://solomon:solomon@localhost:5432/solomon?sslmode=disable")
+	jwtSecret := []byte(env("JWT_SECRET", "dev-secret-change-in-prod"))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	pool, err := pgxpool.New(ctx, dbURL)
+	cancel()
+	if err != nil {
+		log.Fatalf("db connect: %v", err)
+	}
+	defer pool.Close()
+
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	if err := runMigrations(ctx, pool); err != nil {
+		log.Fatalf("migrations: %v", err)
+	}
+	cancel()
+
+	store := NewStore()
+	ctx, cancel = context.WithTimeout(context.Background(), 60*time.Second)
+	if err := loadStore(ctx, pool, store); err != nil {
+		log.Fatalf("load store: %v", err)
+	}
+	cancel()
+	log.Printf("store loaded: %d transactions, %d accounts", len(store.txByID), len(store.accountIdx))
+
+	persister := NewPersister(pool)
+	defer persister.Stop()
+
+	mux := buildRouter(store, persister, pool, jwtSecret)
+
+	srv := &http.Server{
+		Addr:         ":" + port,
+		Handler:      mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	go func() {
+		log.Printf("listening on :%s", port)
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+			log.Fatalf("server: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("shutting down...")
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	srv.Shutdown(ctx)
+}
 
 func buildRouter(store *Store, persister *Persister, pool *pgxpool.Pool, jwtSecret []byte) http.Handler {
 	auth := authMiddleware(jwtSecret)
